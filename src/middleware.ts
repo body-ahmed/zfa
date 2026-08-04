@@ -11,8 +11,14 @@ const isSupabaseConfigured =
   !process.env.NEXT_PUBLIC_SUPABASE_URL!.includes("placeholder");
 
 export async function middleware(request: NextRequest) {
-  if (request.nextUrl.pathname === "/") {
+  const pathname = request.nextUrl.pathname;
+
+  if (pathname === "/") {
     return NextResponse.redirect(new URL("/ar", request.url));
+  }
+
+  if (pathname === "/ar" || pathname === "/en") {
+    return intlMiddleware(request);
   }
 
   const intlResponse = intlMiddleware(request);
