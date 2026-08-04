@@ -1,0 +1,70 @@
+{
+  "common": {
+    "language": "Language",
+    "notFound": "Page not found"
+  },
+  "nav": {
+    "brand": "Zaffa",
+    "home": "Home",
+    "providers": "Providers",
+    "about": "About",
+    "agent": "Agent",
+    "auth": "Auth",
+    "login": "Sign in",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
+  },
+  "home": {
+    "badge": "The #1 Wedding Platform",
+    "title": "Plan your dream wedding with ease",
+    "subtitle": "Discover the best venues, vendors, and planning tools in one place — Zaffa connects you with everything you need for your special day.",
+    "ctaPrimary": "Explore providers",
+    "ctaSecondary": "Learn more",
+    "features": {
+      "venues": {
+        "title": "Venues & Halls",
+        "description": "Browse top wedding halls and venues with real photos and reviews."
+      },
+      "planning": {
+        "title": "Smart Planning",
+        "description": "Organize your budget, timeline, and guest list with easy-to-use tools."
+      },
+      "vendors": {
+        "title": "Trusted Vendors",
+        "description": "Photography, décor, catering, and DJs — all services in one place."
+      }
+    }
+  },
+  "footer": {
+    "brand": "Zaffa | زفة",
+    "tagline": "Your all-in-one wedding planning platform in the region.",
+    "links": "Links",
+    "providers": "Providers",
+    "about": "About",
+    "contact": "Contact",
+    "email": "hello@zaffa.com",
+    "copyright": "© {year} Zaffa. All rights reserved."
+  },
+  "pages": {
+    "providers": {
+      "title": "Providers",
+      "description": "Explore a curated selection of trusted wedding planners, photographers, florists, and venue specialists ready to bring your celebration to life."
+    },
+    "about": {
+      "title": "About Us",
+      "description": "Zaffa is a Saudi wedding planning platform connecting couples with the best vendors in one place."
+    },
+    "agent": {
+      "title": "Wedding Agent",
+      "description": "A friendly planning assistant for budgets, venues, vendors, and timelines."
+    }
+  },
+  "agent": {
+    "title": "Wedding planning assistant",
+    "subtitle": "Ask anything about your wedding plan",
+    "placeholder": "How should I plan a wedding budget?",
+    "inputPlaceholder": "Type your question here…",
+    "send": "Send",
+    "locale": "en"
+  }
+}
