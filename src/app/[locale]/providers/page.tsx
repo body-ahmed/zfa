@@ -1,6 +1,6 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { ProviderShowcase } from "@/components/providers/provider-showcase";
-import { getUserDashboardData } from "@/lib/supabase/public-data";
+import { getListings } from "@/lib/listings/queries";
 
 export default async function ProvidersPage({
   params,
@@ -10,7 +10,7 @@ export default async function ProvidersPage({
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("pages.providers");
-  const { vendors } = await getUserDashboardData();
+  const listings = await getListings();
 
   return (
     <div className="mx-auto max-w-container px-margin-mobile py-16 md:px-margin-desktop">
@@ -18,7 +18,7 @@ export default async function ProvidersPage({
         <h1 className="font-display text-headline-md font-bold">{t("title")}</h1>
         <p className="mt-4 max-w-2xl text-on-surface-variant">{t("description")}</p>
       </div>
-      <ProviderShowcase vendors={vendors} />
+      <ProviderShowcase listings={listings} />
     </div>
   );
 }

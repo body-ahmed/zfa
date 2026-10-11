@@ -124,6 +124,7 @@ export function AdminAuthCard() {
       return;
     }
 
+    await supabase.rpc("ensure_my_profile");
     const { data: profile } = await supabase
       .from("profiles")
       .select("id, full_name, phone, account_role")
@@ -137,7 +138,8 @@ export function AdminAuthCard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(nextSession),
     });
-    setMessage("Signed in. Your wallet is ready.");
+    setMessage("Signed in. Your profile is ready.");
+    window.location.href = `/${locale}/profile`;
     setLoading(false);
   }
 
@@ -167,18 +169,16 @@ export function AdminAuthCard() {
         </p>
 
         <div className="mt-5 rounded-2xl border border-outline-variant/60 bg-background/70 p-4 text-sm text-on-surface-variant">
-          {isAdmin
-            ? "You can open admin and also use your personal wallet."
-            : "Your wallet is linked to this account. Couples pay bookings from it; vendors receive the money in theirs."}
+          {isAdmin ? "You can open the admin workspace from the private admin link." : "Your profile is ready. Add photos, prices, and available dates."}
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3">
           <Button asChild>
-            <Link href={`/${locale}/dashboard`}>Open dashboard</Link>
+            <Link href={`/${locale}/profile`}>Open profile</Link>
           </Button>
           {isAdmin ? (
             <Button asChild>
-              <Link href={`/${locale}/admin`}>Open admin</Link>
+              <Link href={`/${locale}/admin`}>Admin</Link>
             </Button>
           ) : null}
           <Button variant="outline" onClick={handleLogout}>

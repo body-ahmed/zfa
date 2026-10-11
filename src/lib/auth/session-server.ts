@@ -46,7 +46,7 @@ export async function getServerSession(): Promise<AuthSession | null> {
         name: String(profile?.full_name ?? user.user_metadata?.full_name ?? user.email?.split("@")[0] ?? "User"),
         email: String(profile?.email ?? user.email ?? ""),
         phone: String(profile?.phone ?? user.user_metadata?.phone ?? ""),
-        role: mapRole(String(profile?.account_role ?? user.user_metadata?.account_role ?? "bride")),
+        role: mapRole(String(profile?.account_role ?? "bride")),
         createdAt: user.created_at,
       };
     }
