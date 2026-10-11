@@ -13,7 +13,17 @@ export default async function DashboardPage({ params }: { params: Promise<{ loca
     redirect(`/${locale}/auth`);
   }
 
-  const { vendors, bookings, source } = await getUserDashboardData();
+  const { vendors, bookings, wallet, transactions, source } = await getUserDashboardData(session);
 
-  return <UserDashboard session={session} locale={locale} vendors={vendors} bookings={bookings} dataSource={source} />;
+  return (
+    <UserDashboard
+      session={session}
+      locale={locale}
+      vendors={vendors}
+      bookings={bookings}
+      wallet={wallet}
+      transactions={transactions}
+      dataSource={source}
+    />
+  );
 }

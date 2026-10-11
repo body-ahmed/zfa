@@ -2,104 +2,150 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "next-intl";
-import { ArrowRight, HeartHandshake, Phone, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
+import { ArrowRight, HeartHandshake, Phone, ShieldCheck, Sparkles, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/lib/i18n/navigation";
-import { createAccount, getStoredSession, requestOtp, verifyOtp, type AuthRole, type AuthSession } from "@/lib/auth/mock-auth";
+import { createClient } from "@/lib/supabase/client";
+import type { AuthRole, AuthSession } from "@/lib/auth/mock-auth";
 
 const roleCards: Array<{ value: AuthRole; title: string; description: string; accent: string }> = [
-  { value: "bride", title: "Bride & Groom", description: "Plan your celebration from venue to vendors with style and clarity.", accent: "from-rose-500 to-fuchsia-500" },
-  { value: "vendor", title: "Service Provider", description: "Showcase your services, reach couples, and manage your bookings.", accent: "from-sky-500 to-cyan-500" },
-  { value: "member", title: "Guest / Planner", description: "Stay updated, coordinate plans, and enjoy a premium experience.", accent: "from-violet-500 to-indigo-500" },
+  { value: "bride", title: "Bride & Groom", description: "Plan your celebration and pay vendors from your wallet.", accent: "from-rose-500 to-fuchsia-500" },
+  { value: "vendor", title: "Service Provider", description: "Receive booking payments into your Zaffa wallet.", accent: "from-sky-500 to-cyan-500" },
+  { value: "member", title: "Guest / Planner", description: "Stay updated, coordinate plans, and keep a shared wallet.", accent: "from-violet-500 to-indigo-500" },
 ];
+
+function mapSession(userId: string, email: string, metadata: Record<string, unknown>, profile?: { id?: string; full_name?: string; phone?: string; account_role?: string } | null): AuthSession {
+  const role = (profile?.account_role ?? metadata.account_role ?? "bride") as AuthRole;
+  return {
+    id: profile?.id ?? userId,
+    name: String(profile?.full_name ?? metadata.full_name ?? email.split("@")[0]),
+    email,
+    phone: String(profile?.phone ?? metadata.phone ?? ""),
+    role: ["admin", "vendor", "member", "bride"].includes(role) ? role : "bride",
+    createdAt: new Date().toISOString(),
+  };
+}
 
 export function AdminAuthCard() {
   const locale = useLocale();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [role, setRole] = useState<AuthRole>("bride");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("admin@zaffa.com");
-  const [password, setPassword] = useState("Admin123!");
-  const [phone, setPhone] = useState("+966500000000");
-  const [otp, setOtp] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
   const [session, setSession] = useState<AuthSession | null>(null);
-  const [message, setMessage] = useState("Choose your path and continue with a secure sign-in flow.");
-  const [otpSent, setOtpSent] = useState(false);
+  const [message, setMessage] = useState("Create an account or sign in with email and password. Each account gets a wallet.");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const current = getStoredSession();
-    if (current) {
-      setSession(current);
-      void fetch("/api/auth/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(current),
-      });
-    }
+    const supabase = createClient();
+    void supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) {
+        return;
+      }
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, full_name, phone, account_role")
+        .eq("auth_user_id", data.user.id)
+        .maybeSingle();
+      setSession(mapSession(data.user.id, data.user.email ?? "", data.user.user_metadata ?? {}, profile));
+    });
   }, []);
 
   const isAdmin = useMemo(() => session?.role === "admin", [session]);
 
-  async function handleRequestOtp() {
+  async function handleSubmit() {
     setLoading(true);
     setMessage("");
+    const supabase = createClient();
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedEmail || !trimmedPassword) {
+      setMessage("Email and password are required.");
+      setLoading(false);
+      return;
+    }
+
     if (mode === "signup") {
-      const result = createAccount(name, email, password, phone, role);
-      if (!result.ok) {
-        setMessage(result.message);
+      if (!name.trim()) {
+        setMessage("Please enter your name.");
         setLoading(false);
         return;
       }
-      setMessage(result.message);
-      setOtpSent(true);
-      setLoading(false);
-      return;
-    }
 
-    const result = requestOtp(email, password, phone);
-    if (!result.ok) {
-      setMessage(result.message);
-      setLoading(false);
-      return;
-    }
-    setOtpSent(true);
-    setMessage(`${result.message} Demo code: ${result.code}`);
-    setLoading(false);
-  }
-
-  async function handleVerifyOtp() {
-    setLoading(true);
-    setMessage("");
-    const result = verifyOtp(email, otp);
-    if (!result.ok) {
-      setMessage(result.message);
-      setLoading(false);
-      return;
-    }
-
-    const nextSession = result.session ?? null;
-    setSession(nextSession);
-    if (nextSession) {
-      await fetch("/api/auth/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(nextSession),
+      const { data, error } = await supabase.auth.signUp({
+        email: trimmedEmail,
+        password: trimmedPassword,
+        options: {
+          data: {
+            full_name: name.trim(),
+            phone: phone.trim(),
+            account_role: role === "admin" ? "member" : role,
+          },
+        },
       });
+
+      if (error) {
+        setMessage(error.message);
+        setLoading(false);
+        return;
+      }
+
+      if (!data.session) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password: trimmedPassword,
+        });
+        if (signInError) {
+          setMessage("Account created. If login is blocked, confirm the email from Supabase Auth settings, then sign in.");
+          setLoading(false);
+          return;
+        }
+      }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: trimmedEmail,
+        password: trimmedPassword,
+      });
+      if (error) {
+        setMessage(error.message);
+        setLoading(false);
+        return;
+      }
     }
-    setMessage(result.message);
+
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData.user;
+    if (!user) {
+      setMessage("Signed in, but the session could not be loaded. Refresh and try again.");
+      setLoading(false);
+      return;
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id, full_name, phone, account_role")
+      .eq("auth_user_id", user.id)
+      .maybeSingle();
+
+    const nextSession = mapSession(user.id, user.email ?? trimmedEmail, user.user_metadata ?? {}, profile);
+    setSession(nextSession);
+    await fetch("/api/auth/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nextSession),
+    });
+    setMessage("Signed in. Your wallet is ready.");
     setLoading(false);
   }
 
   async function handleLogout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
     await fetch("/api/auth/session", { method: "DELETE" });
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("zaffa.session");
-      window.localStorage.removeItem("zaffa.otp");
-    }
     setSession(null);
-    setOtpSent(false);
-    setOtp("");
     setMessage("Logged out. You can sign in again.");
   }
 
@@ -121,7 +167,9 @@ export function AdminAuthCard() {
         </p>
 
         <div className="mt-5 rounded-2xl border border-outline-variant/60 bg-background/70 p-4 text-sm text-on-surface-variant">
-          {isAdmin ? "You can now access the admin dashboard and manage operations." : "Your account is ready. Continue to your personal dashboard and start planning."}
+          {isAdmin
+            ? "You can open admin and also use your personal wallet."
+            : "Your wallet is linked to this account. Couples pay bookings from it; vendors receive the money in theirs."}
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3">
@@ -133,7 +181,9 @@ export function AdminAuthCard() {
               <Link href={`/${locale}/admin`}>Open admin</Link>
             </Button>
           ) : null}
-          <Button variant="outline" onClick={handleLogout}>Logout</Button>
+          <Button variant="outline" onClick={handleLogout}>
+            Logout
+          </Button>
         </div>
       </div>
     );
@@ -154,9 +204,12 @@ export function AdminAuthCard() {
           </div>
 
           <div className="mt-6 space-y-3">
-            <div className="rounded-2xl border border-outline-variant/60 bg-background/70 p-4 text-sm text-on-surface-variant">• Secure account creation with phone OTP</div>
-            <div className="rounded-2xl border border-outline-variant/60 bg-background/70 p-4 text-sm text-on-surface-variant">• Tailored experience for couples, planners, and service providers</div>
-            <div className="rounded-2xl border border-outline-variant/60 bg-background/70 p-4 text-sm text-on-surface-variant">• Premium dashboard for plans, vendors, and bookings</div>
+            <div className="rounded-2xl border border-outline-variant/60 bg-background/70 p-4 text-sm text-on-surface-variant">• Email and password only — no OTP</div>
+            <div className="inline-flex w-full items-start gap-2 rounded-2xl border border-outline-variant/60 bg-background/70 p-4 text-sm text-on-surface-variant">
+              <Wallet className="mt-0.5 h-4 w-4 text-primary" />
+              Each account gets a wallet. Booking payments go to the vendor wallet.
+            </div>
+            <div className="rounded-2xl border border-outline-variant/60 bg-background/70 p-4 text-sm text-on-surface-variant">• Dashboard for plans, vendors, bookings, and balance</div>
           </div>
         </div>
 
@@ -164,7 +217,9 @@ export function AdminAuthCard() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Access your account</p>
-              <h2 className="font-display text-title-lg font-semibold text-on-background">Sign in with OTP</h2>
+              <h2 className="font-display text-title-lg font-semibold text-on-background">
+                {mode === "signup" ? "Create account" : "Sign in"}
+              </h2>
             </div>
             <div className="rounded-full bg-primary-container p-3 text-primary">
               <Sparkles className="h-5 w-5" />
@@ -177,8 +232,7 @@ export function AdminAuthCard() {
               className={`flex-1 rounded-full px-3 py-2 text-sm font-medium ${mode === "signin" ? "bg-primary text-on-primary" : "text-on-surface-variant"}`}
               onClick={() => {
                 setMode("signin");
-                setMessage("Choose your path and continue with a secure sign-in flow.");
-                setOtpSent(false);
+                setMessage("Sign in with your email and password.");
               }}
             >
               Sign in
@@ -188,8 +242,7 @@ export function AdminAuthCard() {
               className={`flex-1 rounded-full px-3 py-2 text-sm font-medium ${mode === "signup" ? "bg-primary text-on-primary" : "text-on-surface-variant"}`}
               onClick={() => {
                 setMode("signup");
-                setMessage("Create a beautiful account and receive an OTP to your phone.");
-                setOtpSent(false);
+                setMessage("Create an account. A wallet will be created automatically.");
               }}
             >
               Create account
@@ -228,6 +281,7 @@ export function AdminAuthCard() {
             <input
               className="w-full rounded-2xl border border-outline-variant/60 bg-background/70 px-4 py-3 text-sm outline-none"
               placeholder="Email"
+              type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
@@ -238,45 +292,25 @@ export function AdminAuthCard() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
-            <div className="flex items-center gap-2 rounded-2xl border border-outline-variant/60 bg-background/70 px-4 py-3 text-sm">
-              <Phone className="h-4 w-4 text-primary" />
-              <input
-                className="w-full bg-transparent outline-none"
-                placeholder="Phone number"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-              />
-            </div>
+            {mode === "signup" ? (
+              <div className="flex items-center gap-2 rounded-2xl border border-outline-variant/60 bg-background/70 px-4 py-3 text-sm">
+                <Phone className="h-4 w-4 text-primary" />
+                <input
+                  className="w-full bg-transparent outline-none"
+                  placeholder="Phone number (optional)"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                />
+              </div>
+            ) : null}
           </div>
-
-          {otpSent && (
-            <div className="mt-4 space-y-3">
-              <input
-                className="w-full rounded-2xl border border-outline-variant/60 bg-background/70 px-4 py-3 text-sm outline-none"
-                placeholder="Enter OTP"
-                value={otp}
-                onChange={(event) => setOtp(event.target.value)}
-              />
-            </div>
-          )}
 
           {message ? <p className="mt-4 text-sm text-on-surface-variant">{message}</p> : null}
 
           <div className="mt-5 flex flex-wrap gap-3">
-            {!otpSent ? (
-              <Button onClick={handleRequestOtp} disabled={loading}>
-                {loading ? "Working..." : mode === "signup" ? "Create account" : "Request OTP"}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            ) : (
-              <Button onClick={handleVerifyOtp} disabled={loading}>
-                {loading ? "Checking..." : "Verify OTP"}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => setOtpSent(false)}>
-              <UserPlus className="h-4 w-4" />
-              Reset
+            <Button onClick={handleSubmit} disabled={loading}>
+              {loading ? "Working..." : mode === "signup" ? "Create account" : "Sign in"}
+              <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
         </div>

@@ -1,17 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarHeart, CheckCircle2, CircleDollarSign, ClipboardList, LogOut, Sparkles, Store } from "lucide-react";
+import { CalendarHeart, CheckCircle2, CircleDollarSign, ClipboardList, LogOut, Sparkles, Store, Wallet } from "lucide-react";
 import { Link } from "@/lib/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AuthSession } from "@/lib/auth/mock-auth";
-import { clearStoredSession } from "@/lib/auth/mock-auth";
+import { createClient } from "@/lib/supabase/client";
 import type { BookingRecord, VendorRecord } from "@/lib/admin/types";
 import { createDefaultPlan, planStorageKey, type WeddingPlan } from "@/lib/dashboard/defaults";
+import type { WalletSummary, WalletTransaction } from "@/lib/wallet/types";
 
 const tabs = [
   { key: "overview", label: "Overview", icon: Sparkles },
+  { key: "wallet", label: "Wallet", icon: Wallet },
   { key: "checklist", label: "Checklist", icon: ClipboardList },
   { key: "budget", label: "Budget", icon: CircleDollarSign },
   { key: "bookings", label: "Bookings", icon: CalendarHeart },
@@ -25,17 +27,25 @@ export function UserDashboard({
   locale,
   vendors,
   bookings,
+  wallet,
+  transactions,
   dataSource,
 }: {
   session: AuthSession;
   locale: string;
   vendors: VendorRecord[];
   bookings: BookingRecord[];
+  wallet: WalletSummary | null;
+  transactions: WalletTransaction[];
   dataSource: "supabase" | "mock";
 }) {
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [plan, setPlan] = useState<WeddingPlan>(() => createDefaultPlan());
   const [savedVendorIds, setSavedVendorIds] = useState<string[]>([]);
+  const [walletBalance, setWalletBalance] = useState(wallet?.balance ?? 0);
+  const [walletTx, setWalletTx] = useState(transactions);
+  const [walletMessage, setWalletMessage] = useState("");
+  const [walletBusy, setWalletBusy] = useState(false);
 
   useEffect(() => {
     const rawPlan = window.localStorage.getItem(planStorageKey(session.id));
@@ -85,9 +95,57 @@ export function UserDashboard({
   );
 
   async function handleLogout() {
-    clearStoredSession();
+    const supabase = createClient();
+    await supabase.auth.signOut();
     await fetch("/api/auth/session", { method: "DELETE" });
     window.location.href = `/${locale}/auth`;
+  }
+
+  async function handleTopUp() {
+    setWalletBusy(true);
+    setWalletMessage("");
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("add_wallet_funds", { p_amount: 2000 });
+    if (error) {
+      setWalletMessage(error.message);
+      setWalletBusy(false);
+      return;
+    }
+    setWalletBalance(Number(data ?? walletBalance + 2000));
+    setWalletTx((current) => [
+      {
+        id: `tx-${Date.now()}`,
+        amount: 2000,
+        kind: "topup",
+        note: "Wallet top-up",
+        createdAt: new Date().toISOString(),
+      },
+      ...current,
+    ]);
+    setWalletMessage("Added SAR 2,000 to your wallet.");
+    setWalletBusy(false);
+  }
+
+  async function handleBookVendor(vendor: VendorRecord) {
+    setWalletBusy(true);
+    setWalletMessage("");
+    const amount = 2500;
+    const supabase = createClient();
+    const { error } = await supabase.rpc("pay_vendor_booking", {
+      p_vendor_id: vendor.id,
+      p_amount: amount,
+      p_service: vendor.specialty,
+    });
+    if (error) {
+      setWalletMessage(error.message);
+      setActiveTab("wallet");
+      setWalletBusy(false);
+      return;
+    }
+    setWalletBalance((current) => current - amount);
+    setWalletMessage(`Paid SAR ${amount.toLocaleString()} to ${vendor.name}. The money is now in their wallet.`);
+    setActiveTab("wallet");
+    setWalletBusy(false);
   }
 
   function toggleChecklist(id: string) {
@@ -139,7 +197,7 @@ export function UserDashboard({
           { label: "Checklist progress", value: `${checklistProgress}%` },
           { label: "Budget spent", value: `SAR ${budgetSummary.spent.toLocaleString()}` },
           { label: "Bookings", value: String(myBookings.length || bookings.length) },
-          { label: "Saved vendors", value: String(savedVendors.length) },
+          { label: "Wallet", value: `SAR ${walletBalance.toLocaleString()}` },
         ].map((stat) => (
           <div key={stat.label} className="rounded-2xl border border-outline-variant/60 bg-surface-container-low/70 p-4">
             <p className="text-xs uppercase tracking-wide text-on-surface-variant">{stat.label}</p>
@@ -221,9 +279,45 @@ export function UserDashboard({
                 </div>
               </dl>
               <div className="mt-4 rounded-xl bg-primary-container/40 p-3 text-sm text-on-surface-variant">
-                Your checklist and budget auto-save in this browser. Connect Supabase to sync across devices.
+                Wallet balance: SAR {walletBalance.toLocaleString()}. Top up, then pay a vendor — the amount moves to their account wallet.
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === "wallet" && (
+          <div className="space-y-5">
+            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-sm text-on-surface-variant">Available balance</p>
+                <p className="font-display text-headline-sm font-bold">SAR {walletBalance.toLocaleString()}</p>
+                <p className="mt-2 max-w-xl text-sm text-on-surface-variant">
+                  This is an in-app wallet. When you book a vendor, the amount leaves your wallet and is credited to theirs. Card/Mada payouts can be added next.
+                </p>
+              </div>
+              <Button onClick={handleTopUp} disabled={walletBusy}>
+                {walletBusy ? "Working..." : "Add SAR 2,000"}
+              </Button>
+            </div>
+            {walletMessage ? <p className="text-sm text-on-surface-variant">{walletMessage}</p> : null}
+            {dataSource !== "supabase" ? (
+              <p className="text-sm text-on-surface-variant">Wallet sync needs a live Supabase session. Sign in again if the balance does not update.</p>
+            ) : null}
+            <ul className="space-y-2">
+              {walletTx.length === 0 ? (
+                <li className="rounded-xl border border-outline-variant/60 bg-surface-container-low p-4 text-sm text-on-surface-variant">No wallet activity yet.</li>
+              ) : (
+                walletTx.map((tx) => (
+                  <li key={tx.id} className="flex items-center justify-between rounded-xl border border-outline-variant/60 bg-surface-container-low px-4 py-3 text-sm">
+                    <span>{tx.note || tx.kind}</span>
+                    <span className={tx.amount < 0 ? "text-on-surface-variant" : "font-semibold"}>
+                      {tx.amount > 0 ? "+" : ""}
+                      {tx.amount.toLocaleString()} {wallet?.currency ?? "SAR"}
+                    </span>
+                  </li>
+                ))
+              )}
+            </ul>
           </div>
         )}
 
@@ -323,9 +417,14 @@ export function UserDashboard({
                     {vendor.specialty} · {vendor.location} · ★ {vendor.rating}
                   </p>
                 </div>
-                <Button variant={savedVendorIds.includes(vendor.id) ? "default" : "outline"} onClick={() => toggleSavedVendor(vendor.id)}>
-                  {savedVendorIds.includes(vendor.id) ? "Saved" : "Save vendor"}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant={savedVendorIds.includes(vendor.id) ? "default" : "outline"} onClick={() => toggleSavedVendor(vendor.id)}>
+                    {savedVendorIds.includes(vendor.id) ? "Saved" : "Save vendor"}
+                  </Button>
+                  <Button onClick={() => handleBookVendor(vendor)} disabled={walletBusy}>
+                    Book · SAR 2,500
+                  </Button>
+                </div>
               </div>
             ))}
             {savedVendors.length > 0 ? (

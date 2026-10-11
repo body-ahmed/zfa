@@ -127,3 +127,5 @@ select * from (values
   ('Admin', 'Lumen Studio', 'Photography package', 'pending', current_date + 120, 9000, 'Jeddah')
 ) as seed(client_name, vendor_name, service, status, booking_date, amount, location)
 where not exists (select 1 from public.bookings limit 1);
+
+-- Wallets and booking payments are applied via migration `wallets_and_booking_payments`.
