@@ -103,7 +103,7 @@ export function AdminShell({ initialData }: { initialData?: { data: AdminStore; 
             transition={{ duration: 0.2 }}
             className="mt-6 rounded-3xl border border-outline-variant/60 bg-background/70 p-4"
           >
-            {activeTab === "overview" && <OverviewPanel data={data} />}
+            {activeTab === "overview" && <OverviewPanel />}
             {activeTab === "users" && <UsersPanel data={data} />}
             {activeTab === "vendors" && <VendorsPanel data={data} />}
             {activeTab === "bookings" && <BookingsPanel data={data} />}
@@ -116,7 +116,7 @@ export function AdminShell({ initialData }: { initialData?: { data: AdminStore; 
   );
 }
 
-function OverviewPanel({ data }: { data: AdminStore }) {
+function OverviewPanel() {
   return (
     <div className="grid gap-4 lg:grid-cols-[1.4fr_0.8fr]">
       <div className="rounded-2xl border border-outline-variant/60 bg-surface-container-low p-5">

@@ -31,6 +31,11 @@ export function AdminAuthCard() {
     const current = getStoredSession();
     if (current) {
       setSession(current);
+      void fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(current),
+      });
     }
   }, []);
 
@@ -73,12 +78,21 @@ export function AdminAuthCard() {
       return;
     }
 
-    setSession(result.session ?? null);
+    const nextSession = result.session ?? null;
+    setSession(nextSession);
+    if (nextSession) {
+      await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nextSession),
+      });
+    }
     setMessage(result.message);
     setLoading(false);
   }
 
-  function handleLogout() {
+  async function handleLogout() {
+    await fetch("/api/auth/session", { method: "DELETE" });
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("zaffa.session");
       window.localStorage.removeItem("zaffa.otp");

@@ -13,6 +13,10 @@ const isSupabaseConfigured =
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
+  if (pathname.startsWith("/api")) {
+    return NextResponse.next();
+  }
+
   if (pathname === "/") {
     return NextResponse.redirect(new URL("/ar", request.url));
   }
@@ -38,6 +42,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
